@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,10 +25,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build mod jar
-        run: gradle build --no-daemon --stacktrace
+        run: gradle build --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Upload built jar
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: horrormod-jar
           path: build/libs/*.jar
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Report failure as issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAIL=$(tail -c 50000 build.log)
+          gh issue create --title "Build failed: run ${{ github.run_id }}" --body "$TAIL"
